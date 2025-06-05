@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/luism2302/gator/internal/cli"
 	"github.com/luism2302/gator/internal/config"
 	"github.com/luism2302/gator/internal/database"
+	"github.com/luism2302/gator/internal/rss"
 )
 
 func main() {
@@ -52,6 +54,10 @@ func main() {
 		commands.Register(command.Name, cli.HandlerLogin)
 	case "register":
 		commands.Register(command.Name, cli.HandlerRegister)
+	case "reset":
+		commands.Register(command.Name, cli.HandlerReset)
+	case "users":
+		commands.Register(command.Name, cli.HandlerUsers)
 	default:
 		fmt.Println("unknown command")
 		os.Exit(1)
@@ -61,4 +67,10 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	test, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	fmt.Println(test)
 }

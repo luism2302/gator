@@ -67,3 +67,20 @@ func getConfigFilePath() (string, error) {
 	}
 	return filepath, nil
 }
+
+func GetLoggedUser() (string, error) {
+	filepath, err := getConfigFilePath()
+	if err != nil {
+		return "", fmt.Errorf("couldnt find the .gatorconfig.json file in the home directory")
+	}
+	data, err := os.ReadFile(filepath)
+	if err != nil {
+		return "", fmt.Errorf("couldnt read from config file")
+	}
+	var config Config
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		return "", fmt.Errorf("couldnt unmarshal json into Config struct: %w", err)
+	}
+	return config.Curr_username, nil
+}

@@ -74,3 +74,36 @@ func HandlerRegister(s *State, cmd Command) error {
 	fmt.Printf("created user %s: %v", name, newUser)
 	return nil
 }
+
+func HandlerReset(s *State, cmd Command) error {
+	if len(cmd.Arguments) != 0 {
+		return fmt.Errorf("this command doesnt accept arguments")
+	}
+	err := s.Db.ResetDatabase(context.Background())
+	if err != nil {
+		return fmt.Errorf("error reseting database: %w", err)
+	}
+	return nil
+}
+
+func HandlerUsers(s *State, cmd Command) error {
+	if len(cmd.Arguments) != 0 {
+		return fmt.Errorf("this command doesnt accept arguments")
+	}
+	users, err := s.Db.GetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("error getting users: %w", err)
+	}
+	logged_user, err := config.GetLoggedUser()
+	if err != nil {
+		return fmt.Errorf("couldnt get logged user: %w", err)
+	}
+	for _, user := range users {
+		if user == logged_user {
+			fmt.Printf("* %s (current)\n", user)
+			continue
+		}
+		fmt.Printf("* %s\n", user)
+	}
+	return nil
+}
