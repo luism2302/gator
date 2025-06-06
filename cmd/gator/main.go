@@ -44,6 +44,7 @@ func main() {
 	commands.Register("follow", cli.MiddlewareLoggedIn(cli.HandlerFollow))
 	commands.Register("following", cli.MiddlewareLoggedIn(cli.HandlerFollowing))
 	commands.Register("unfollow", cli.MiddlewareLoggedIn(cli.HandlerUnfollow))
+	commands.Register("browse", cli.HandlerBrowse)
 
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: cli <command> [args...]")

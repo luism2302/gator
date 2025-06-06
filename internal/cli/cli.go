@@ -2,13 +2,16 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"html"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/luism2302/gator/internal/config"
 	"github.com/luism2302/gator/internal/database"
-	"github.com/luism2302/gator/internal/rss"
+	"github.com/mmcdole/gofeed"
 )
 
 type State struct {
@@ -112,15 +115,18 @@ func HandlerUsers(s *State, cmd Command) error {
 }
 
 func HandlerAgg(s *State, cmd Command) error {
-	if len(cmd.Arguments) > 0 {
-		return fmt.Errorf("this command doesnt support arguments")
+	if len(cmd.Arguments) != 1 {
+		return fmt.Errorf("you must only provide a duration in string format")
 	}
-	contents, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	timeBetweenReqs, err := time.ParseDuration(cmd.Arguments[0])
 	if err != nil {
 		return err
 	}
-	fmt.Println(contents)
-	return nil
+	fmt.Printf("Collecting feeds every %s...\n", timeBetweenReqs)
+	ticker := time.NewTicker(timeBetweenReqs)
+	for ; ; <-ticker.C {
+		ScrapeFeeds(s)
+	}
 }
 
 func HandlerAddFeed(s *State, cmd Command, user database.User) error {
@@ -128,10 +134,12 @@ func HandlerAddFeed(s *State, cmd Command, user database.User) error {
 		return fmt.Errorf("you must provide a Name and a URL as arguments")
 	}
 	params := database.CreateFeedParams{
-		ID:     uuid.New(),
-		UserID: user.ID,
-		Name:   cmd.Arguments[0],
-		Url:    cmd.Arguments[1],
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		Name:      cmd.Arguments[0],
+		Url:       cmd.Arguments[1],
 	}
 	feed, err := s.Db.CreateFeed(context.Background(), params)
 	if err != nil {
@@ -219,6 +227,29 @@ func HandlerUnfollow(s *State, cmd Command, user database.User) error {
 	return nil
 }
 
+func HandlerBrowse(s *State, cmd Command) error {
+	var limit int
+	var err error
+	if len(cmd.Arguments) == 0 {
+		limit = 2
+	} else {
+		limit, err = strconv.Atoi(cmd.Arguments[0])
+		if err != nil {
+			return err
+		}
+	}
+	posts, err := s.Db.GetPostsForUser(context.Background(), int32(limit))
+	if err != nil {
+		return err
+	}
+	for i, _ := range posts {
+		posts[i].Title = html.UnescapeString(posts[i].Title)
+		posts[i].Url = html.UnescapeString(posts[i].Url)
+		fmt.Printf("Title: %s. URL: %s\n", posts[i].Title, posts[i].Url)
+	}
+	return nil
+}
+
 func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) error) func(*State, Command) error {
 	return func(s *State, cmd Command) error {
 		user, err := s.Db.GetUser(context.Background(), s.Cfg.Curr_username)
@@ -228,4 +259,45 @@ func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) 
 		return handler(s, cmd, user)
 	}
 
+}
+
+func ScrapeFeeds(s *State) error {
+	next_feed, err := s.Db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("error fetching feed")
+	}
+	params := database.MarkedFeedFetchedParams{
+		ID:            next_feed.ID,
+		UpdatedAt:     time.Now(),
+		LastFetchedAt: sql.NullTime{Time: time.Now(), Valid: true},
+	}
+	err = s.Db.MarkedFeedFetched(context.Background(), params)
+	if err != nil {
+		return err
+	}
+	parser := gofeed.NewParser()
+	feed, err := parser.ParseURL(next_feed.Url)
+	if err != nil {
+		return err
+	}
+	for i, item := range feed.Items {
+		if i == 0 {
+			fmt.Printf("---------------------- %s ----------------------\n", feed.Title)
+		}
+		params_post := database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: sql.NullString{String: item.Description, Valid: true},
+			PublishedAt: *item.PublishedParsed,
+			FeedID:      next_feed.ID,
+		}
+		_, err = s.Db.CreatePost(context.Background(), params_post)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
