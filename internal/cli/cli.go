@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/luism2302/gator/internal/config"
 	"github.com/luism2302/gator/internal/database"
+	"github.com/luism2302/gator/internal/rss"
 )
 
 type State struct {
@@ -35,49 +36,51 @@ func (c *Commands) Register(name string, f func(s *State, cmd Command) error) {
 	c.Name_to_function[name] = f
 }
 func HandlerLogin(s *State, cmd Command) error {
-	if len(cmd.Arguments) == 0 {
+	if len(cmd.Arguments) < 1 {
 		return fmt.Errorf("you must provide a username as an argument")
-	}
-	if s == nil {
-		return fmt.Errorf("nil pointer to state")
 	}
 	_, err := s.Db.GetUser(context.Background(), cmd.Arguments[0])
 	if err != nil {
 		return fmt.Errorf("user %s doesnt exist", cmd.Arguments[0])
 	}
-	s.Cfg.SetUser(cmd.Arguments[0])
-	fmt.Printf("user: %s has been set", cmd.Arguments[0])
+	err = s.Cfg.SetUser(cmd.Arguments[0])
+	if err != nil {
+		return err
+	}
+	fmt.Printf("logged in as: %s", cmd.Arguments[0])
 	return nil
 }
 
 func HandlerRegister(s *State, cmd Command) error {
-	if len(cmd.Arguments) == 0 {
-		return fmt.Errorf("you must pass a name as an argument")
+	if len(cmd.Arguments) < 1 {
+		return fmt.Errorf("you must provide a username as an argument")
 	}
 	name := cmd.Arguments[0]
 	_, err := s.Db.GetUser(context.Background(), name)
 	if err == nil {
 		return fmt.Errorf("user %s already exists", name)
 	}
-
 	params := database.CreateUserParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Name:      name,
 	}
-	newUser, err2 := s.Db.CreateUser(context.Background(), params)
-	if err2 != nil {
-		return err2
+	newUser, err := s.Db.CreateUser(context.Background(), params)
+	if err != nil {
+		return err
 	}
-	s.Cfg.SetUser(name)
+	err = s.Cfg.SetUser(newUser.Name)
+	if err != nil {
+		return err
+	}
 	fmt.Printf("created user %s: %v", name, newUser)
 	return nil
 }
 
 func HandlerReset(s *State, cmd Command) error {
-	if len(cmd.Arguments) != 0 {
-		return fmt.Errorf("this command doesnt accept arguments")
+	if len(cmd.Arguments) > 0 {
+		return fmt.Errorf("this command doesnt support arguments")
 	}
 	err := s.Db.ResetDatabase(context.Background())
 	if err != nil {
@@ -87,14 +90,14 @@ func HandlerReset(s *State, cmd Command) error {
 }
 
 func HandlerUsers(s *State, cmd Command) error {
-	if len(cmd.Arguments) != 0 {
-		return fmt.Errorf("this command doesnt accept arguments")
+	if len(cmd.Arguments) > 0 {
+		return fmt.Errorf("this command doesnt support arguments")
 	}
 	users, err := s.Db.GetUsers(context.Background())
 	if err != nil {
 		return fmt.Errorf("error getting users: %w", err)
 	}
-	logged_user, err := config.GetLoggedUser()
+	logged_user, err := config.GetLoggedUserName()
 	if err != nil {
 		return fmt.Errorf("couldnt get logged user: %w", err)
 	}
@@ -106,4 +109,123 @@ func HandlerUsers(s *State, cmd Command) error {
 		fmt.Printf("* %s\n", user)
 	}
 	return nil
+}
+
+func HandlerAgg(s *State, cmd Command) error {
+	if len(cmd.Arguments) > 0 {
+		return fmt.Errorf("this command doesnt support arguments")
+	}
+	contents, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+	fmt.Println(contents)
+	return nil
+}
+
+func HandlerAddFeed(s *State, cmd Command, user database.User) error {
+	if len(cmd.Arguments) < 2 {
+		return fmt.Errorf("you must provide a Name and a URL as arguments")
+	}
+	params := database.CreateFeedParams{
+		ID:     uuid.New(),
+		UserID: user.ID,
+		Name:   cmd.Arguments[0],
+		Url:    cmd.Arguments[1],
+	}
+	feed, err := s.Db.CreateFeed(context.Background(), params)
+	if err != nil {
+		return fmt.Errorf("error creating feed: %w", err)
+	}
+	fmt.Printf("user %v: created feed %s, with url: %s\n", feed.UserID, feed.Name, feed.Url)
+	params_follow := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	}
+	_, err = s.Db.CreateFeedFollow(context.Background(), params_follow)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func HandlerFeeds(s *State, cmd Command) error {
+	if len(cmd.Arguments) > 0 {
+		return fmt.Errorf("this command doesnt support arguments")
+	}
+	feeds, err := s.Db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("error getting feeds: %w", err)
+	}
+	for _, feed := range feeds {
+		fmt.Printf("Name: %s\n", feed.Name)
+		fmt.Printf("URL: %s\n", feed.Url)
+		fmt.Printf("Created by: %s\n", feed.UserName)
+	}
+	return nil
+}
+
+func HandlerFollow(s *State, cmd Command, user database.User) error {
+	if len(cmd.Arguments) == 0 {
+		return fmt.Errorf("you must provide an URL as an argument")
+	}
+	feed, err := s.Db.GetFeed(context.Background(), cmd.Arguments[0])
+	if err != nil {
+		return fmt.Errorf("error getting feed: %w", err)
+	}
+	params := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	}
+	new_feed_follow, err := s.Db.CreateFeedFollow(context.Background(), params)
+	if err != nil {
+		return fmt.Errorf("error creating new followed feed: %w", err)
+	}
+	fmt.Printf("Feed: %s\n", new_feed_follow.FeedName)
+	fmt.Printf("Followed by: %s\n", new_feed_follow.UserName)
+	return nil
+}
+
+func HandlerFollowing(s *State, cmd Command, user database.User) error {
+	if len(cmd.Arguments) > 0 {
+		return fmt.Errorf("this command doesnt support arguments")
+	}
+	following, err := s.Db.GetFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return err
+	}
+	for i, followed := range following {
+		if i == 0 {
+			fmt.Printf("%s follows:\n", followed.UserName)
+		}
+		fmt.Printf("- %s\n", followed.FeedName)
+	}
+	return nil
+}
+func HandlerUnfollow(s *State, cmd Command, user database.User) error {
+	if len(cmd.Arguments) == 0 {
+		return fmt.Errorf("you must provide an URL as an argument")
+	}
+	err := s.Db.DeleteFeedFollow(context.Background(), cmd.Arguments[0])
+	if err != nil {
+		return fmt.Errorf("error deleting follow")
+	}
+	return nil
+}
+
+func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) error) func(*State, Command) error {
+	return func(s *State, cmd Command) error {
+		user, err := s.Db.GetUser(context.Background(), s.Cfg.Curr_username)
+		if err != nil {
+			return err
+		}
+		return handler(s, cmd, user)
+	}
+
 }

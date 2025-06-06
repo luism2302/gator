@@ -9,47 +9,48 @@ import (
 const config_file = ".gatorconfig.json"
 
 type Config struct {
-	Url           string `json:"db_url"`
+	DbUrl         string `json:"db_url"`
 	Curr_username string `json:"current_user_name"`
 }
 
-func Read() (*Config, error) {
+func Read() (Config, error) {
 	filepath, err := getConfigFilePath()
 	if err != nil {
-		return nil, err
+		return Config{}, err
 	}
-	data, err := os.ReadFile(filepath)
+	file, err := os.Open(filepath)
 	if err != nil {
-		return nil, fmt.Errorf("couldnt read from config file: %w", err)
+		return Config{}, fmt.Errorf("couldnt open config file: %w", err)
 	}
-	var config Config
-	err = json.Unmarshal(data, &config)
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	cfg := Config{}
+	err = decoder.Decode(&cfg)
 	if err != nil {
-		return nil, fmt.Errorf("couldnt unmarshal json into Config struct: %w", err)
+		return Config{}, fmt.Errorf("couldnt decode json into Config struct: %w", err)
 	}
-	return &config, nil
+	return cfg, nil
 }
-func (cfg Config) SetUser(username string) error {
+func (cfg *Config) SetUser(username string) error {
 	cfg.Curr_username = username
-	err := write(cfg)
-	if err != nil {
-		return err
-	}
-	return nil
+	return write(*cfg)
 }
 
 func write(cfg Config) error {
-	marshalled, err := json.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("error marshaling Config struct into json: %w", err)
-	}
 	filepath, err := getConfigFilePath()
 	if err != nil {
-		return fmt.Errorf("couldnt file .gatorconfig.json on home directory")
+		return err
 	}
-	err = os.WriteFile(filepath, marshalled, 666)
+	file, err := os.Create(filepath)
 	if err != nil {
-		return fmt.Errorf("error writing to file: %w", err)
+		return fmt.Errorf("error creating file: %w", err)
+	}
+	defer file.Close()
+	encoder := json.NewEncoder(file)
+	err = encoder.Encode(cfg)
+	if err != nil {
+		return fmt.Errorf("error encoding Config struct into json")
 	}
 	return nil
 }
@@ -59,28 +60,15 @@ func getConfigFilePath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("couldnt find home directory: %w", err)
 	}
-
 	filepath := home + "/" + config_file
-	_, err2 := os.Stat(filepath)
-	if err2 != nil {
-		return "", fmt.Errorf("couldnt find the .gatorconfig.json file in the home directory")
-	}
 	return filepath, nil
 }
 
-func GetLoggedUser() (string, error) {
-	filepath, err := getConfigFilePath()
+func GetLoggedUserName() (string, error) {
+	cfg, err := Read()
 	if err != nil {
-		return "", fmt.Errorf("couldnt find the .gatorconfig.json file in the home directory")
+		return "", err
 	}
-	data, err := os.ReadFile(filepath)
-	if err != nil {
-		return "", fmt.Errorf("couldnt read from config file")
-	}
-	var config Config
-	err = json.Unmarshal(data, &config)
-	if err != nil {
-		return "", fmt.Errorf("couldnt unmarshal json into Config struct: %w", err)
-	}
-	return config.Curr_username, nil
+	return cfg.Curr_username, nil
+
 }

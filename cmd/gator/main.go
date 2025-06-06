@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -10,67 +9,52 @@ import (
 	"github.com/luism2302/gator/internal/cli"
 	"github.com/luism2302/gator/internal/config"
 	"github.com/luism2302/gator/internal/database"
-	"github.com/luism2302/gator/internal/rss"
 )
 
 func main() {
 	//read config
-	config, err := config.Read()
+	cfg, err := config.Read()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	//check if num of arguments if valid
-	if len(os.Args) < 2 {
-		fmt.Println("too few arguments provided")
-		os.Exit(1)
-	}
-	//db stuff
-	dbURL := "postgres://postgres@localhost:5432/gator?sslmode=disable"
-	db, err := sql.Open("postgres", dbURL)
+	db, err := sql.Open("postgres", cfg.DbUrl)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	defer db.Close()
+
 	dbQueries := database.New(db)
 	//initialize state and commands
-	state := cli.State{
+	state := &cli.State{
 		Db:  dbQueries,
-		Cfg: config,
+		Cfg: &cfg,
 	}
 	commands := cli.Commands{
 		Name_to_function: map[string]func(s *cli.State, cmd cli.Command) error{},
 	}
+	commands.Register("login", cli.HandlerLogin)
+	commands.Register("register", cli.HandlerRegister)
+	commands.Register("reset", cli.HandlerReset)
+	commands.Register("users", cli.HandlerUsers)
+	commands.Register("agg", cli.HandlerAgg)
+	commands.Register("addfeed", cli.MiddlewareLoggedIn(cli.HandlerAddFeed))
+	commands.Register("feeds", cli.HandlerFeeds)
+	commands.Register("follow", cli.MiddlewareLoggedIn(cli.HandlerFollow))
+	commands.Register("following", cli.MiddlewareLoggedIn(cli.HandlerFollowing))
+	commands.Register("unfollow", cli.MiddlewareLoggedIn(cli.HandlerUnfollow))
 
-	//commands
-	command_name := os.Args[1]
-	args := os.Args[2:]
-	command := cli.Command{
-		Name:      command_name,
-		Arguments: args,
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: cli <command> [args...]")
 	}
-	switch command.Name {
-	case "login":
-		commands.Register(command.Name, cli.HandlerLogin)
-	case "register":
-		commands.Register(command.Name, cli.HandlerRegister)
-	case "reset":
-		commands.Register(command.Name, cli.HandlerReset)
-	case "users":
-		commands.Register(command.Name, cli.HandlerUsers)
-	default:
-		fmt.Println("unknown command")
-		os.Exit(1)
-	}
-	err = commands.Run(&state, command)
+	commandName := os.Args[1]
+	commandArgs := os.Args[2:]
+
+	err = commands.Run(state, cli.Command{Name: commandName, Arguments: commandArgs})
+
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	test, err := rss.FetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	fmt.Println(test)
 }
