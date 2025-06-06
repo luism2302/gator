@@ -203,7 +203,7 @@ func HandlerFollow(s *State, cmd Command, user database.User) error {
 	}
 	new_feed_follow, err := s.Db.CreateFeedFollow(context.Background(), params)
 	if err != nil {
-		return fmt.Errorf("error creating new followed feed: %w", err)
+		return fmt.Errorf("logged user %s already follows feed %s", user.Name, feed.Name)
 	}
 	fmt.Printf("Feed: %s\n", new_feed_follow.FeedName)
 	fmt.Printf("Followed by: %s\n", new_feed_follow.UserName)
