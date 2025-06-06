@@ -52,6 +52,11 @@ func main() {
 	commandName := os.Args[1]
 	commandArgs := os.Args[2:]
 
+	if _, ok := commands.Name_to_function[commandName]; !ok {
+		fmt.Println("unknown command")
+		os.Exit(1)
+	}
+
 	err = commands.Run(state, cli.Command{Name: commandName, Arguments: commandArgs})
 
 	if err != nil {

@@ -41,6 +41,8 @@ func (c *Commands) Register(name string, f func(s *State, cmd Command) error) {
 func HandlerLogin(s *State, cmd Command) error {
 	if len(cmd.Arguments) < 1 {
 		return fmt.Errorf("you must provide a username as an argument")
+	} else if len(cmd.Arguments) > 1 {
+		return fmt.Errorf("this command only supports one argument")
 	}
 	_, err := s.Db.GetUser(context.Background(), cmd.Arguments[0])
 	if err != nil {
@@ -57,6 +59,8 @@ func HandlerLogin(s *State, cmd Command) error {
 func HandlerRegister(s *State, cmd Command) error {
 	if len(cmd.Arguments) < 1 {
 		return fmt.Errorf("you must provide a username as an argument")
+	} else if len(cmd.Arguments) > 1 {
+		return fmt.Errorf("this command only supports one argument")
 	}
 	name := cmd.Arguments[0]
 	_, err := s.Db.GetUser(context.Background(), name)
@@ -115,8 +119,10 @@ func HandlerUsers(s *State, cmd Command) error {
 }
 
 func HandlerAgg(s *State, cmd Command) error {
-	if len(cmd.Arguments) != 1 {
-		return fmt.Errorf("you must only provide a duration in string format")
+	if len(cmd.Arguments) < 1 {
+		return fmt.Errorf("you must provide a Duration formatted as a string as an argument")
+	} else if len(cmd.Arguments) > 1 {
+		return fmt.Errorf("this command only supports one argument")
 	}
 	timeBetweenReqs, err := time.ParseDuration(cmd.Arguments[0])
 	if err != nil {
@@ -132,6 +138,8 @@ func HandlerAgg(s *State, cmd Command) error {
 func HandlerAddFeed(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) < 2 {
 		return fmt.Errorf("you must provide a Name and a URL as arguments")
+	} else if len(cmd.Arguments) > 2 {
+		return fmt.Errorf("this command only supports two arguments")
 	}
 	params := database.CreateFeedParams{
 		ID:        uuid.New(),
@@ -177,8 +185,10 @@ func HandlerFeeds(s *State, cmd Command) error {
 }
 
 func HandlerFollow(s *State, cmd Command, user database.User) error {
-	if len(cmd.Arguments) == 0 {
+	if len(cmd.Arguments) < 1 {
 		return fmt.Errorf("you must provide an URL as an argument")
+	} else if len(cmd.Arguments) > 1 {
+		return fmt.Errorf("this command only supports one argument")
 	}
 	feed, err := s.Db.GetFeed(context.Background(), cmd.Arguments[0])
 	if err != nil {
@@ -217,8 +227,10 @@ func HandlerFollowing(s *State, cmd Command, user database.User) error {
 	return nil
 }
 func HandlerUnfollow(s *State, cmd Command, user database.User) error {
-	if len(cmd.Arguments) == 0 {
+	if len(cmd.Arguments) < 1 {
 		return fmt.Errorf("you must provide an URL as an argument")
+	} else if len(cmd.Arguments) > 1 {
+		return fmt.Errorf("this command only supports one argument")
 	}
 	err := s.Db.DeleteFeedFollow(context.Background(), cmd.Arguments[0])
 	if err != nil {
@@ -228,6 +240,9 @@ func HandlerUnfollow(s *State, cmd Command, user database.User) error {
 }
 
 func HandlerBrowse(s *State, cmd Command) error {
+	if len(cmd.Arguments) > 1 {
+		return fmt.Errorf("this command only supports zero or one argument")
+	}
 	var limit int
 	var err error
 	if len(cmd.Arguments) == 0 {
