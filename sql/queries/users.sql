@@ -12,6 +12,9 @@ SELECT * FROM users WHERE name = $1;
 
 -- name: ResetDatabase :exec
 DELETE FROM users;
+DELETE FROM posts;
+DELETE FROM feeds;
+DELETE FROM feed_follows;
 
 -- name: GetUsers :many
 SELECT name FROM users;
