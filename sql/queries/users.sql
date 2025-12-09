@@ -6,3 +6,6 @@ INSERT INTO users(id, created_at, updated_at, name) VALUES (
   $4
 )
 RETURNING *;
+
+-- name: GetAllUsers :many
+SELECT name FROM users;

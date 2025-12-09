@@ -2,9 +2,10 @@ package main
 
 import _ "github.com/lib/pq"
 import (
-	"fmt"
+	"database/sql"
 	"github.com/luism2302/gator/internal/commands"
 	"github.com/luism2302/gator/internal/config"
+	"github.com/luism2302/gator/internal/database"
 	"log"
 	"os"
 )
@@ -14,13 +15,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	db, err := sql.Open("postgres", cfg.DbUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	dbQueries := database.New(db)
+
 	state := commands.State{
 		Cfg: &cfg,
+		Db:  dbQueries,
 	}
-	cmds := commands.Commands{
+
+	var cmds = commands.Commands{
 		MapHandler: make(map[string]func(*commands.State, commands.Command) error),
 	}
 	cmds.Register("login", commands.HandlerLogin)
+	cmds.Register("register", commands.HandlerRegister)
+
 	args := os.Args
 	if len(args) < 2 {
 		log.Fatal("error: no command provided. Usage: gator <command> [args]")
@@ -30,6 +42,7 @@ func main() {
 	if len(args) > 2 {
 		cmdArgs = args[2:]
 	}
+
 	cmd := commands.Command{
 		Name: cmdName,
 		Args: cmdArgs,
@@ -43,5 +56,4 @@ func main() {
 		log.Fatalf("error reading config: %v", err)
 	}
 
-	fmt.Println(cfg)
 }
