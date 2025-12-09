@@ -1,5 +1,6 @@
 package main
 
+import _ "github.com/lib/pq"
 import (
 	"fmt"
 	"github.com/luism2302/gator/internal/commands"
