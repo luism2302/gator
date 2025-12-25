@@ -9,3 +9,6 @@ RETURNING *;
 
 -- name: GetAllUsers :many
 SELECT name FROM users;
+
+-- name: DeleteAllUsers :exec
+DELETE FROM users;
