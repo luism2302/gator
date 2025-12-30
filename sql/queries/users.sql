@@ -12,3 +12,6 @@ SELECT name FROM users;
 
 -- name: DeleteAllUsers :exec
 DELETE FROM users;
+
+-- name: GetUserByName :one
+SELECT * FROM users WHERE name = $1;

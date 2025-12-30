@@ -27,14 +27,14 @@ type RSSItem struct {
 
 func HandlerAgg(s *State, cmd Command) error {
 	testUrl := "https://www.wagslane.dev/index.xml"
-	fetchedFeed, err := fetchFeed(context.Background(), testUrl)
+	fetchedFeed, err := FetchFeed(context.Background(), testUrl)
 	if err != nil {
 		return err
 	}
 	fmt.Println(fetchedFeed)
 	return nil
 }
-func fetchFeed(ctx context.Context, feedUrl string) (*RSSFeed, error) {
+func FetchFeed(ctx context.Context, feedUrl string) (*RSSFeed, error) {
 	client := http.Client{}
 	request, err := http.NewRequestWithContext(ctx, "GET", feedUrl, nil)
 	if err != nil {
