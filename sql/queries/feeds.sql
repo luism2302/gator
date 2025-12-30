@@ -8,3 +8,12 @@ INSERT INTO feeds(id, created_at, updated_at, name, url, user_id) VALUES (
     $6
 ) 
 RETURNING *;
+
+-- name: GetFeeds :many
+SELECT 
+    feeds.name,
+    feeds.url,
+    users.name
+FROM feeds
+    JOIN users ON users.id = feeds.user_id
+;
