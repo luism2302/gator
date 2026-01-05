@@ -8,13 +8,9 @@ import (
 	"time"
 )
 
-func HandlerAddFeed(s *State, cmd Command) error {
+func HandlerAddFeed(s *State, cmd Command, u database.User) error {
 	if len(cmd.Args) < 2 {
 		return fmt.Errorf("error: expected args <name> <url>")
-	}
-	loggedUser, err := s.Db.GetUserByName(context.Background(), s.Cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("error: couldnt get user: %s from db", s.Cfg.CurrentUserName)
 	}
 	feedName := cmd.Args[0]
 	feedUrl := cmd.Args[1]
@@ -24,7 +20,7 @@ func HandlerAddFeed(s *State, cmd Command) error {
 		UpdatedAt: time.Now(),
 		Name:      feedName,
 		Url:       feedUrl,
-		UserID:    loggedUser.ID,
+		UserID:    u.ID,
 	}
 
 	newFeed, err := s.Db.CreateFeed(context.Background(), newFeedParams)
@@ -35,7 +31,7 @@ func HandlerAddFeed(s *State, cmd Command) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID:    loggedUser.ID,
+		UserID:    u.ID,
 		FeedID:    newFeed.ID,
 	}
 	_, err = s.Db.CreateFeedFollow(context.Background(), followFeedParams)
