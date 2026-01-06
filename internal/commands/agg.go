@@ -2,11 +2,15 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/luism2302/gator/internal/database"
 )
 
 type RSSFeed struct {
@@ -26,13 +30,19 @@ type RSSItem struct {
 }
 
 func HandlerAgg(s *State, cmd Command) error {
-	testUrl := "https://www.wagslane.dev/index.xml"
-	fetchedFeed, err := FetchFeed(context.Background(), testUrl)
-	if err != nil {
-		return err
+	if len(cmd.Args) < 1 {
+		return fmt.Errorf("error: agg command requires timeBetweenReqs argument")
 	}
-	fmt.Println(fetchedFeed)
-	return nil
+	timeBetweenReqs, err := time.ParseDuration(cmd.Args[0])
+	if err != nil {
+		return fmt.Errorf("error: unsupported duration. Please use s, m or h as units")
+	}
+	fmt.Printf("Collecting feeds every %s\n", cmd.Args[0])
+	ticker := time.NewTicker(timeBetweenReqs)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
+
 }
 func FetchFeed(ctx context.Context, feedUrl string) (*RSSFeed, error) {
 	client := http.Client{}
@@ -64,4 +74,34 @@ func FetchFeed(ctx context.Context, feedUrl string) (*RSSFeed, error) {
 	}
 
 	return &feed, nil
+}
+
+func scrapeFeeds(s *State) error {
+	nextFeed, err := s.Db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("error: couldnt get next feed to fetch: %w", err)
+	}
+	lastFetchedAt := sql.NullTime{
+		Time:  time.Now(),
+		Valid: true,
+	}
+
+	markFeedParams := database.MarkFeedFetchedParams{
+		UpdatedAt:     time.Now(),
+		LastFetchedAt: lastFetchedAt,
+		ID:            nextFeed.ID,
+	}
+	err = s.Db.MarkFeedFetched(context.Background(), markFeedParams)
+	if err != nil {
+		return fmt.Errorf("error: couldnt mark feed as fetched: %w", err)
+	}
+	fetchedFeed, err := FetchFeed(context.Background(), nextFeed.Url)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("======Succesfully fetched feed: %s======\n", fetchedFeed.Channel.Title)
+	for _, item := range fetchedFeed.Channel.Item {
+		fmt.Printf("-\t%s\n", item.Title)
+	}
+	return nil
 }
